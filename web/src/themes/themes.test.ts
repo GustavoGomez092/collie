@@ -330,25 +330,28 @@ describe("every default shape word is today's CSS", () => {
   const theme = themeBlock("@theme {");
   const inline = themeBlock("@theme inline {");
 
-  it("radius: sharp is the four 2px steps, now in @theme and no longer in @theme inline", () => {
+  // FORK: the default radius word is `round` (8/12/16/24), so @theme carries that ramp.
+  it("radius: round is the 8/12/16/24 ramp, in @theme and not in @theme inline", () => {
+    const ramp = new Map([["--radius-sm", "8px"], ["--radius-md", "12px"], ["--radius-lg", "16px"], ["--radius-xl", "24px"]]);
     for (const [property, value] of wordDeclarations("radius", SURFACE_DEFAULTS.radius)) {
       if (property === "--edge-accent" || property === "--edge-shadow") continue;
       expect(theme.get(property), property).toBe(value);
-      expect(value).toBe("2px");
+      expect(value).toBe(ramp.get(property));
       expect(inline.has(property), property).toBe(false);
     }
     // The base radius stays where it was, and bare `rounded` and `rounded-full` are not steps.
     expect(root.get("--radius")).toBe("2px");
   });
 
-  it("radius: sharp's row mark is the left bar every accent used to spell, declared on :root", () => {
+  // FORK: under round corners a marked row wears the 2px ring, never the left bar.
+  it("radius: round's row mark is the ring on all four sides, declared on :root", () => {
     const edge = new Map(wordDeclarations("radius", SURFACE_DEFAULTS.radius)).get("--edge-accent");
-    expect(edge).toBe("inset 2px 0 0 0");
+    expect(edge).toBe("inset 0 0 0 2px");
     expect(root.get("--edge-accent")).toBe(edge);
     expect(theme.has("--edge-accent") || inline.has("--edge-accent")).toBe(false);
-    // Its second shadow layer is none, so a marked row draws what it drew before.
+    // Its second shadow layer is the soft shadow that goes with the ring.
     const second = new Map(wordDeclarations("radius", SURFACE_DEFAULTS.radius)).get("--edge-shadow");
-    expect(second).toBe("0 0 #0000");
+    expect(second).toBe("0 1px 3px 0 rgb(0 0 0 / 0.1)");
     expect(root.get("--edge-shadow")).toBe(second);
   });
 
@@ -361,12 +364,14 @@ describe("every default shape word is today's CSS", () => {
     }
   });
 
-  it("density: default is Tailwind's spacing step, which index.css does not set on :root", () => {
+  // FORK: the default density word is `roomy`, set once in @theme over Tailwind's own 0.25rem step.
+  it("density: roomy is the default step, set in @theme and not on :root", () => {
     const [[property, value] = ["", ""]] = wordDeclarations("density", SURFACE_DEFAULTS.density);
     expect(property).toBe("--spacing");
-    expect(tailwind("--spacing")).toBe(value);
+    expect(value).toBe("0.28rem");
+    expect(theme.get("--spacing")).toBe(value);
     expect(root.has("--spacing")).toBe(false);
-    expect(theme.has("--spacing") || inline.has("--spacing")).toBe(false);
+    expect(inline.has("--spacing")).toBe(false);
   });
 
   it("weight: default is Tailwind's medium and semibold", () => {

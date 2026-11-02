@@ -23,6 +23,14 @@ Running a crew? Update the lead first; members follow on their own. Details:
 
 ## [Unreleased]
 
+### Added
+
+- **The dashboard folds into machines and spaces.** Each crew machine is a row that folds its spaces, and each space is one row (its worst dot and counts) until tapped open to its panes. The folds are remembered per device; the summary line's jump opens the space it lands on. Fork change.
+
+### Changed
+
+- **Round corners and roomy spacing are the default look.** The default theme now uses the `round` radius and the `roomy` density words; `sharp` and the old spacing stay one choice away in Settings. Fork change.
+
 ## [1.25.4] - 2026-11-01
 
 ### Fixed

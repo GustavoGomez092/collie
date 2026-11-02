@@ -94,6 +94,37 @@ function OrderedAgentList({ initial }: { initial: PaneOrder }) {
   );
 }
 
+/**
+ * The folded dashboard (fork: collapsible spaces), live: the crew herd as machine → space → panes,
+ * the fold state held here as the route holds it in the device's prefs. The first open space and the
+ * third machine shut, so one card shows all three states.
+ */
+function FoldedAgentList() {
+  const [openSpaces, setOpenSpaces] = useState<string[]>([]);
+  const [closedMachines, setClosedMachines] = useState<string[]>([]);
+  const flip = (list: string[], key: string) => (list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
+  return (
+    <AgentList
+      agents={homeCrew.agents}
+      shellPanes={homeCrew.shellPanes}
+      servers={homeCrew.servers}
+      bridge="connected"
+      onOpen={() => {}}
+      newTab={HEADING_NEW_TAB}
+      folds={{
+        openSpaces,
+        closedMachines,
+        onToggleSpace: (key) => setOpenSpaces((l) => flip(l, key)),
+        onToggleMachine: (host) => setClosedMachines((l) => flip(l, host)),
+        onOpenPlace: (key, host) => {
+          setOpenSpaces((l) => (l.includes(key) ? l : [...l, key]));
+          setClosedMachines((l) => l.filter((h) => h !== host));
+        },
+      }}
+    />
+  );
+}
+
 /** A tab body this card does not build for real: one quiet line saying what the tab would hold. */
 const body = (label: string) => () => (
   <p className="rounded-md border border-border px-3 py-6 text-center text-sm text-muted-foreground">{label}</p>
@@ -181,6 +212,18 @@ export function DashboardSection() {
         >
           <PhoneFrameCard>
             <AgentList agents={herd} bridge="connected" onOpen={() => {}} newTab={HEADING_NEW_TAB} />
+          </PhoneFrameCard>
+        </Card>
+
+        <Card
+          state="agent-list-folded"
+          label="agent list, folded: machine → space → panes (fork)"
+          reach="the default dashboard in this fork. Every space is one row until tapped; on a crew each machine folds its spaces."
+          note="Tap a machine or a space to fold it. A folded row keeps its worst dot and its counts, so nothing that needs you goes quiet."
+          span={2}
+        >
+          <PhoneFrameCard>
+            <FoldedAgentList />
           </PhoneFrameCard>
         </Card>
 

@@ -236,8 +236,8 @@
      a 2px bar on the left edge, under soft or round corners a 2px ring on all four sides, because a
      left accent bar is never combined with rounded corners. This is the sharp value. A marked row's
      second shadow layer is --edge-shadow: none under sharp, a soft shadow with the ring. */
-  --edge-accent: inset 2px 0 0 0;
-  --edge-shadow: 0 0 #0000;
+  --edge-accent: inset 0 0 0 2px;
+  --edge-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
   /* THE SEVEN MORE A THEME MAY PICK (M57 spec 17, lib/theme/surface.ts). Each is the value the app
      drew before, so the Collie theme sets none of them and looks the same:
        ground  `--ground-image`, painted on `html` over the page colour (the html rule below);
@@ -622,10 +622,13 @@
      --radius: 2px the stock `- 2px` and `- 4px` forms compute 0 and -2px, and a negative radius is
      invalid. In `@theme` and not `@theme inline` (schema version 2): `rounded-md` then compiles to
      `var(--radius-md)`, which a theme's `radius` word sets (lib/theme/surface.ts). */
-  --radius-sm: 2px;
-  --radius-md: 2px;
-  --radius-lg: 2px;
-  --radius-xl: 2px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  /* Fork: the round ramp is the default radius and roomy the default density
+     (lib/theme/surface.ts SURFACE_DEFAULTS); these are the same values those words set. */
+  --spacing: 0.28rem;
 }
 
 @theme inline {

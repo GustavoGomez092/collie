@@ -118,6 +118,22 @@ export interface DashPrefs {
    * See lib/pane-view.ts for why it is one per-device value and not a per-pane override.
    */
   paneView: PaneView;
+  /**
+   * The dashboard's open workspaces (fork: collapsible spaces), by the key a device remembers a
+   * workspace by (`workspacePrefKey`). A workspace starts folded to its heading, so the first screen
+   * is the list of spaces; a tap opens it to its panes and the device remembers it.
+   */
+  openSpaces: string[];
+  /**
+   * The crew machines folded shut on the dashboard, by host key. A machine starts open, so its
+   * spaces show on the first screen; a tap on its heading folds them away and the device remembers it.
+   */
+  closedMachines: string[];
+  /**
+   * Whether the dashboard folds at all (fork). ON by default: the list is machine → space → panes,
+   * every space one row until opened. Off draws every pane under its workspace heading, as upstream.
+   */
+  foldSpaces: boolean;
 }
 
 const STORAGE_KEY = "collie:dash-prefs:v1";
@@ -151,6 +167,9 @@ const DEFAULTS: DashPrefs = {
   showCompactions: false,
   paneOrder: "place",
   paneView: "chat",
+  openSpaces: [],
+  closedMachines: [],
+  foldSpaces: true,
 };
 
 function coerceDepth(raw: JsonValue | undefined): number {
@@ -229,6 +248,9 @@ export function coerceDashPrefs(raw: JsonValue | undefined): DashPrefs {
     showCompactions: asJsonBoolean(p.showCompactions) ?? DEFAULTS.showCompactions,
     paneOrder: coercePaneOrder(p.paneOrder),
     paneView: coercePaneView(p.paneView),
+    openSpaces: coerceKeys(p.openSpaces),
+    closedMachines: coerceKeys(p.closedMachines),
+    foldSpaces: asJsonBoolean(p.foldSpaces) ?? DEFAULTS.foldSpaces,
   };
 }
 
@@ -278,6 +300,13 @@ export interface UseDashPrefsReturn {
   setShowCompactions: (show: boolean) => void;
   setPaneOrder: (order: PaneOrder) => void;
   setPaneView: (view: PaneView) => void;
+  /** Open a folded workspace, or fold an open one. */
+  toggleSpaceOpen: (key: string) => void;
+  /** Fold a machine's spaces away, or open them again. */
+  toggleMachineClosed: (host: string) => void;
+  /** Open one workspace and the machine it sits on, leaving every other fold as it was: a jump's target. */
+  openPlace: (spaceKey: string, host: string) => void;
+  setFoldSpaces: (fold: boolean) => void;
 }
 
 export function useDashPrefs(): UseDashPrefsReturn {
@@ -333,6 +362,39 @@ export function useDashPrefs(): UseDashPrefsReturn {
     });
   }, []);
 
+  const toggleSpaceOpen = useCallback((key: string) => {
+    setPrefs((p) => {
+      const openSpaces = p.openSpaces.includes(key) ? p.openSpaces.filter((k) => k !== key) : [...p.openSpaces, key];
+      const next: DashPrefs = { ...p, openSpaces };
+      savePrefs(next);
+      return next;
+    });
+  }, []);
+  const toggleMachineClosed = useCallback((host: string) => {
+    setPrefs((p) => {
+      const closedMachines = p.closedMachines.includes(host)
+        ? p.closedMachines.filter((h) => h !== host)
+        : [...p.closedMachines, host];
+      const next: DashPrefs = { ...p, closedMachines };
+      savePrefs(next);
+      return next;
+    });
+  }, []);
+  const openPlace = useCallback((spaceKey: string, host: string) => {
+    setPrefs((p) => {
+      if (p.openSpaces.includes(spaceKey) && !p.closedMachines.includes(host)) return p;
+      const next: DashPrefs = {
+        ...p,
+        openSpaces: p.openSpaces.includes(spaceKey) ? p.openSpaces : [...p.openSpaces, spaceKey],
+        closedMachines: p.closedMachines.filter((h) => h !== host),
+      };
+      savePrefs(next);
+      return next;
+    });
+  }, []);
+
+  const setFoldSpaces = useCallback((foldSpaces: boolean) => update({ foldSpaces }), [update]);
+
   return {
     prefs,
     setSpacesOpen,
@@ -353,5 +415,9 @@ export function useDashPrefs(): UseDashPrefsReturn {
     setShowCompactions,
     setPaneOrder,
     setPaneView,
+    toggleSpaceOpen,
+    toggleMachineClosed,
+    openPlace,
+    setFoldSpaces,
   };
 }

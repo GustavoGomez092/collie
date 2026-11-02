@@ -140,19 +140,23 @@ const GRAIN_LINES = `${groundMix(GROUND_GRAIN_LINE)} 0 1px, transparent 1px 4px`
  * theme to another always overwrites what the last one set.
  */
 export const SURFACE = {
+  // Fork: round corners are the default (the owner found the 2px house corner too edgy), so `round`
+  // leads and a theme that names no radius gets it; sharp stays one word away in Settings.
   radius: {
-    sharp: radii(2, 2, 2, 2, EDGE_BAR, NONE),
-    soft: radii(4, 6, 8, 12, EDGE_RING, EDGE_SOFT),
     round: radii(8, 12, 16, 24, EDGE_RING, EDGE_SOFT),
+    soft: radii(4, 6, 8, 12, EDGE_RING, EDGE_SOFT),
+    sharp: radii(2, 2, 2, 2, EDGE_BAR, NONE),
   },
   shadow: {
     default: shadows(SHADOW.sm, SHADOW.xs, SHADOW.sm, SHADOW.md, SHADOW.lg, SHADOW.xl, SHADOW["2xl"]),
     flat: shadows(NONE, NONE, NONE, NONE, NONE, NONE, NONE),
     lifted: shadows(SHADOW.md, SHADOW.sm, SHADOW.md, SHADOW.lg, SHADOW.xl, SHADOW["2xl"], SHADOW_3XL),
   },
+  // Fork: roomy spacing is the default, for the same owner's "better spacing"; `default` keeps its
+  // name and value (the stock 4px step) one word away in Settings.
   density: {
-    default: [["--spacing", "0.25rem"]],
     roomy: [["--spacing", "0.28rem"]],
+    default: [["--spacing", "0.25rem"]],
   },
   weight: {
     default: [
@@ -243,9 +247,9 @@ export interface Surface {
 
 /** The word each token has when a file does not name one: today's look. */
 export const SURFACE_DEFAULTS = {
-  radius: "sharp",
+  radius: "round",
   shadow: "default",
-  density: "default",
+  density: "roomy",
   weight: "default",
   border: "default",
   ground: "flat",

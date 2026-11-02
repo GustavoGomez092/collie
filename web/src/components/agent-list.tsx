@@ -5,6 +5,8 @@ import { clockTime } from "@/lib/format";
 import { useMuxCapability } from "@/lib/mux-capability";
 import { SectionHeader } from "@/components/section-header";
 import { ListGroup } from "@/components/ui/list-group";
+import { Collapse } from "@/components/ui/collapse";
+import { FoldRow } from "@/components/ui/fold-row";
 import {
   groupPanesByWorkspace,
   resolveIsolatedPrefKeys,
@@ -12,10 +14,10 @@ import {
   type WorkspaceGroup,
 } from "@/lib/pane-groups";
 import { StatusCounts, StatusSummaryLine } from "@/components/status-counts";
-import { ATTENTION, bucketOf, triage, worstTriage } from "@/lib/triage";
+import { ATTENTION, bucketOf, TRIAGE_STATUS, triage, worstTriage } from "@/lib/triage";
 import { groupHost, pinnedRows, shownGroups, stripEntries } from "@/lib/dash-view";
-import type { AgentView, BridgeStatus, ServerSummary, SessionSummary, TabView, WorkspaceView } from "@/lib/types";
-import { paneRowKey, paneScope } from "@/lib/hosts";
+import { statusLabel, type AgentView, type BridgeStatus, type ServerSummary, type SessionSummary, type TabView, type WorkspaceView } from "@/lib/types";
+import { hostName, isMultiHost, paneRowKey, paneScope } from "@/lib/hosts";
 import { machinesHiddenFrom } from "@/lib/hidden-machines";
 import { pinMatcher, type Pin } from "@/lib/pins";
 import { inRankOrder, type PaneOrder } from "@/lib/pane-order";
@@ -28,7 +30,7 @@ import { tabCreateKey } from "@/hooks/use-spaces";
 import { AgentCard } from "./agent-card";
 import { PinHint } from "./pin-hint";
 import { WorkspaceNewTab } from "./workspace-new-tab";
-import { t } from "@/lib/i18n";
+import { t, tn } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/hooks/use-locale";
 
@@ -164,6 +166,25 @@ interface AgentListProps {
    * the summary line instead, never to `body`.
    */
   reveal?: { rowKey: string } | null;
+  /**
+   * The folded dashboard (fork: collapsible spaces). Given, the place-order body reads machine →
+   * space → panes: every space is one row until opened, and on a crew each machine is a row that folds
+   * its spaces away. The fold state is the device's (hooks/use-dash-prefs.ts). Omit and the list
+   * renders as it did, every pane under its workspace heading.
+   */
+  folds?: DashFolds;
+}
+
+/** What the folded dashboard needs from the route (AgentListProps.folds). */
+export interface DashFolds {
+  /** The open workspaces, by `workspacePrefKey`. Every other workspace is folded to its row. */
+  openSpaces: readonly string[];
+  /** The folded machines, by host key. Every other machine shows its spaces. */
+  closedMachines: readonly string[];
+  onToggleSpace: (key: string) => void;
+  onToggleMachine: (host: string) => void;
+  /** Open one workspace and its machine, for a jump to it; every other fold stays as it is. */
+  onOpenPlace: (spaceKey: string, host: string) => void;
 }
 
 /** What a workspace heading's "+" needs from the route (AgentListProps.newTab). */
@@ -207,6 +228,11 @@ export function workspacePrefKey(g: WorkspaceGroup): string {
 /** A DOM id for a workspace group, so the summary line can scroll to it. */
 function groupDomId(key: string): string {
   return `ws-group-${key.replace(/[^A-Za-z0-9_-]/gu, "_")}`;
+}
+
+/** A DOM id for a crew machine's section on the folded dashboard. */
+function machineDomId(host: string): string {
+  return `machine-${host.replace(/[^A-Za-z0-9_-]/gu, "_") || "lead"}`;
 }
 
 /** A DOM id for a pane row, so a pin or unpin can find the row again in its new place. */
@@ -291,6 +317,7 @@ export function AgentList({
   onOrderChange,
   onHold,
   reveal = null,
+  folds,
 }: AgentListProps) {
   useLocale();
   // THE FREEZE (ADR 0071 point 3, taken up by the dashboard 2026-10-05). Read once on mount, on an
@@ -446,6 +473,14 @@ export function AgentList({
       onIsolate?.(groups.filter((x) => x === g || isolatedGroups.includes(x)).map(workspacePrefKey));
       return;
     }
+    // Folded, the target may be shut: open it and its machine, then scroll once the fold has drawn it.
+    if (folds) {
+      folds.onOpenPlace(workspacePrefKey(g), groupHost(g));
+      requestAnimationFrame(() =>
+        document.getElementById(groupDomId(g.key))?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      );
+      return;
+    }
     document.getElementById(groupDomId(g.key))?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   const jumpToRow = (pane: AgentView) => {
@@ -524,6 +559,73 @@ export function AgentList({
       tint
       stale={stale}
     />
+  );
+
+  // THE FOLDED BODY (fork: collapsible spaces). Machine → space → panes, in the same place order as
+  // the flat body, so nothing moves on a state change; only the operator's tap opens or folds a row.
+  // A space row carries its worst dot and its counts, a machine row its worst dot (named, since nothing
+  // else on it says the state) and how many spaces it holds, so a folded row never hides what needs you.
+  const spaceFold = ({ group: g, rows }: (typeof drawn)[number], level: 2 | 3) => {
+    const key = workspacePrefKey(g);
+    const open = folds?.openSpaces.includes(key) ?? true;
+    const worst = worstTriage(g.panes);
+    const bodyId = `${groupDomId(g.key)}-panes`;
+    return (
+      <section key={g.key} id={groupDomId(g.key)} className="flex scroll-mt-4 flex-col">
+        <FoldRow
+          tone="space"
+          level={level}
+          label={g.label}
+          open={open}
+          onToggle={() => folds?.onToggleSpace(key)}
+          controls={bodyId}
+          status={worst === null ? undefined : TRIAGE_STATUS[worst]}
+          meta={<StatusCounts panes={g.panes} className="text-[11px] text-muted-foreground" />}
+          trailing={headingNewTab(g)}
+        />
+        <Collapse open={open}>
+          <div id={bodyId} className="pb-2 pl-3 pt-1">
+            <ListGroup>{rows.map((a) => row(a, workspaceGroupKey(a) === g.key ? "place" : "herd"))}</ListGroup>
+          </div>
+        </Collapse>
+      </section>
+    );
+  };
+  const machines: { host: string; groups: typeof drawn }[] = [];
+  for (const d of drawn) {
+    const host = groupHost(d.group);
+    const at = machines.find((m) => m.host === host);
+    if (at) at.groups.push(d);
+    else machines.push({ host, groups: [d] });
+  }
+  const foldedBody = isMultiHost(servers) ? (
+    machines.map((m) => {
+      const open = !(folds?.closedMachines.includes(m.host) ?? false);
+      const worst = worstTriage(m.groups.flatMap((d) => d.group.panes));
+      const status = worst === null ? undefined : TRIAGE_STATUS[worst];
+      const bodyId = `${machineDomId(m.host)}-spaces`;
+      return (
+        <section key={machineDomId(m.host)} id={machineDomId(m.host)} className="flex scroll-mt-4 flex-col gap-1">
+          <FoldRow
+            tone="machine"
+            label={hostName(servers, m.host) ?? m.host}
+            open={open}
+            onToggle={() => folds?.onToggleMachine(m.host)}
+            controls={bodyId}
+            status={status}
+            statusLabel={status === undefined ? undefined : statusLabel(status)}
+            meta={tn("home.workspaceFilter.count", m.groups.length)}
+          />
+          <Collapse open={open}>
+            <div id={bodyId} className="flex flex-col gap-0.5 pl-1 pt-1">
+              {m.groups.map((d) => spaceFold(d, 3))}
+            </div>
+          </Collapse>
+        </section>
+      );
+    })
+  ) : (
+    <div className="flex flex-col gap-0.5">{drawn.map((d) => spaceFold(d, 2))}</div>
   );
 
   const summary = (
@@ -667,7 +769,9 @@ export function AgentList({
         </section>
       )}
 
-      {!renderBody && !ranked && drawn.map(({ group: g, rows }) => (
+      {!renderBody && !ranked && folds && foldedBody}
+
+      {!renderBody && !ranked && !folds && drawn.map(({ group: g, rows }) => (
         <section key={g.key} id={groupDomId(g.key)} className="flex scroll-mt-4 flex-col gap-2">
           <SectionHeader
             label={g.label}

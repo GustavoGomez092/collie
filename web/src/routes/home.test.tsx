@@ -25,6 +25,12 @@ import { withHeaderHost } from "@/test/header-host";
 import { server } from "@/test/setup";
 import { HomeRoute } from "./home";
 
+// FORK: the dashboard folds by default (machine → space → panes). These route tests were written for
+// the flat list, so each starts with the fold switched off; the folded default has its own case below.
+beforeEach(() => {
+  localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ foldSpaces: false }));
+});
+
 // The dashboard, one machine and several. The point of the pair is that the FIRST one is unchanged:
 // a solo install renders no switcher, no chips and no extra affordance, and the multi-host case is
 // the same screen with labels — never a per-host split, never a second list.
@@ -415,6 +421,18 @@ describe("the dashboard's footer (ADR 0066, ADR 0085)", () => {
     expect(screen.getByRole("heading", { name: "collie" })).toBeInTheDocument();
   });
 
+  it("folds every space to one row by default, and a tap opens it and is remembered (fork)", async () => {
+    localStorage.clear();
+    renderHome(solo());
+    await settled();
+    const webapp = screen.getByRole("button", { name: /^webapp(,|$)/ });
+    expect(webapp).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: /^collie(,|$)/ })).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(webapp);
+    expect(webapp).toHaveAttribute("aria-expanded", "true");
+    expect(stored().openSpaces).toHaveLength(1);
+  });
+
   it("a solo Collie has two tabs, Dashboard and Files, and no Crew", async () => {
     renderHome(solo());
     await settled();
@@ -475,24 +493,24 @@ describe("the dashboard's footer (ADR 0066, ADR 0085)", () => {
   });
 
   it("the Crew tab still draws its body when the crew has no pane anywhere", async () => {
-    localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ dashView: "crew" }));
+    localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ foldSpaces: false, dashView: "crew" }));
     renderHome(homeData({ servers: fixtureServers, sessions: [] }));
     expect(await screen.findByTestId("crew-tab")).toBeInTheDocument();
   });
 
   it("a stored crew tab with no crew shows the Dashboard and leaves the stored value alone", async () => {
-    localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ dashView: "crew" }));
+    localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ foldSpaces: false, dashView: "crew" }));
     renderHome(solo());
     await settled();
     expect(tab(/^Dashboard/)).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("heading", { name: "webapp" })).toBeInTheDocument();
-    expect(stored()).toEqual({ dashView: "crew" });
+    expect(stored()).toEqual({ foldSpaces: false, dashView: "crew" });
   });
 
   it("opens on the Dashboard with the switch on when a device's stored tab was Focus (ADR 0085)", async () => {
     // "focus" is the tab's name since ADR 0068; "needs" and "attention" are the names before it.
     for (const old of ["focus", "needs", "attention"]) {
-      localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ dashView: old }));
+      localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ foldSpaces: false, dashView: old }));
       renderHome(solo());
       await settled();
       expect(tab(/^Dashboard/)).toHaveAttribute("aria-current", "page");
@@ -504,7 +522,7 @@ describe("the dashboard's footer (ADR 0066, ADR 0085)", () => {
   });
 
   it("opens on the Dashboard when a device's stored tab was the old Panes", async () => {
-    localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ dashView: "panes" }));
+    localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ foldSpaces: false, dashView: "panes" }));
     renderHome(solo());
     await settled();
     expect(tab(/^Dashboard/)).toHaveAttribute("aria-current", "page");
@@ -768,7 +786,7 @@ describe("the dashboard's footer (ADR 0066, ADR 0085)", () => {
     // 1. Start with the worktree open as an orphan and isolate it in the filter.
     localStorage.setItem(
       "collie:dash-prefs:v1",
-      JSON.stringify({ isolatedSpaces: ["\u0000\u0000lucky-meadow-d1ec"] }),
+      JSON.stringify({ foldSpaces: false, isolatedSpaces: ["\u0000\u0000lucky-meadow-d1ec"] }),
     );
     let createdTabBody = "";
     server.use(
@@ -893,7 +911,7 @@ describe("the dashboard's footer (ADR 0066, ADR 0085)", () => {
     expect(key).toEqual(expect.stringContaining("collie"));
     cleanup();
     localStorage.clear();
-    localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ isolatedSpace: key }));
+    localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ foldSpaces: false, isolatedSpace: key }));
     renderHome(solo());
     await settled();
     expect(screen.queryByRole("heading", { name: "webapp" })).not.toBeInTheDocument();

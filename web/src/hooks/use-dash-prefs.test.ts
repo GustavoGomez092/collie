@@ -46,6 +46,9 @@ describe("coerceDashPrefs", () => {
       showCompactions: false,
       paneOrder: "place",
       paneView: "chat",
+      openSpaces: [],
+      closedMachines: [],
+      foldSpaces: true,
     });
   });
 
@@ -89,6 +92,9 @@ describe("coerceDashPrefs", () => {
       showCompactions: false,
       paneOrder: "activity",
       paneView: "terminal",
+      openSpaces: [],
+      closedMachines: [],
+      foldSpaces: true,
     });
   });
 
@@ -206,6 +212,9 @@ describe("coerceDashPrefs", () => {
       showCompactions: false,
       paneOrder: "place",
       paneView: "chat",
+      openSpaces: [],
+      closedMachines: [],
+      foldSpaces: true,
     });
   });
 });
@@ -234,6 +243,9 @@ describe("useDashPrefs", () => {
       showCompactions: false,
       paneOrder: "place",
       paneView: "chat",
+      openSpaces: [],
+      closedMachines: [],
+      foldSpaces: true,
     });
   });
 
@@ -279,6 +291,9 @@ describe("useDashPrefs", () => {
       showCompactions: false,
       paneOrder: "activity",
       paneView: "terminal",
+      openSpaces: [],
+      closedMachines: [],
+      foldSpaces: true,
     });
   });
 
@@ -308,5 +323,61 @@ describe("useDashPrefs", () => {
     localStorage.setItem("collie:dash-prefs:v1", "{not json");
     const { result } = renderHook(() => useDashPrefs());
     expect(result.current.prefs.recentDir).toBe("newest");
+  });
+});
+
+describe("the dashboard's fold state (fork: collapsible spaces)", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("keeps stored open spaces and closed machines, each once, and drops anything that is not a string", () => {
+    const prefs = coerceDashPrefs({ openSpaces: ["a", "a", 3, "b"], closedMachines: ["mac-mini", null] });
+    expect(prefs.openSpaces).toEqual(["a", "b"]);
+    expect(prefs.closedMachines).toEqual(["mac-mini"]);
+  });
+
+  it("reads a missing or wrong-typed fold state as everything at its default", () => {
+    const prefs = coerceDashPrefs({ openSpaces: "a", closedMachines: {} });
+    expect(prefs.openSpaces).toEqual([]);
+    expect(prefs.closedMachines).toEqual([]);
+  });
+
+  it("toggles a space open and shut, and a machine shut and open, and remembers both", () => {
+    const { result } = renderHook(() => useDashPrefs());
+    act(() => result.current.toggleSpaceOpen("lead\u0000s1\u0000HomeLab"));
+    act(() => result.current.toggleMachineClosed("mac-mini"));
+    expect(result.current.prefs.openSpaces).toEqual(["lead\u0000s1\u0000HomeLab"]);
+    expect(result.current.prefs.closedMachines).toEqual(["mac-mini"]);
+    const again = renderHook(() => useDashPrefs());
+    expect(again.result.current.prefs.openSpaces).toEqual(["lead\u0000s1\u0000HomeLab"]);
+    act(() => result.current.toggleSpaceOpen("lead\u0000s1\u0000HomeLab"));
+    act(() => result.current.toggleMachineClosed("mac-mini"));
+    expect(result.current.prefs.openSpaces).toEqual([]);
+    expect(result.current.prefs.closedMachines).toEqual([]);
+  });
+
+  it("opens several spaces at once, so a jump can open its target without touching the rest", () => {
+    const { result } = renderHook(() => useDashPrefs());
+    act(() => result.current.toggleSpaceOpen("one"));
+    act(() => result.current.openPlace("two", "mac-mini"));
+    act(() => result.current.toggleMachineClosed("bluefin"));
+    act(() => result.current.openPlace("one", "bluefin"));
+    expect(result.current.prefs.openSpaces).toEqual(["one", "two"]);
+    expect(result.current.prefs.closedMachines).toEqual([]);
+  });
+});
+
+describe("the folded dashboard switch (fork)", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("folds by default, and a stored false keeps the flat list", () => {
+    expect(coerceDashPrefs({}).foldSpaces).toBe(true);
+    expect(coerceDashPrefs({ foldSpaces: false }).foldSpaces).toBe(false);
+    expect(coerceDashPrefs({ foldSpaces: "no" }).foldSpaces).toBe(true);
+  });
+
+  it("is remembered on the device", () => {
+    const { result } = renderHook(() => useDashPrefs());
+    act(() => result.current.setFoldSpaces(false));
+    expect(renderHook(() => useDashPrefs()).result.current.prefs.foldSpaces).toBe(false);
   });
 });

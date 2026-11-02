@@ -1551,3 +1551,112 @@ describe("AgentList — the order select", () => {
     expect(selectRow.querySelector(".invisible")).not.toBeNull();
   });
 });
+
+// THE FOLDED DASHBOARD (fork: collapsible spaces). With `folds` given, the list reads machine →
+// space → panes: every space starts folded to one row (its name, its worst dot, its count), a machine
+// row folds its spaces away, and nothing that needs you goes quiet while folded. Without `folds` the
+// list renders exactly as above.
+describe("AgentList — folded spaces", () => {
+  const member = (id: string, isLead = false): ServerSummary => ({
+    id,
+    name: id,
+    isLead,
+    reachable: true,
+    protocol: "ok",
+    lastSeenAt: 1_000,
+  });
+  const servers = [member("bluefin", true), member("workshop"), member("attic")];
+  const on = (host: string, workspaceId: string, workspaceLabel: string, workspaceNumber: number) =>
+    ({ host, workspaceId, workspaceLabel, workspaceNumber, tabId: `${workspaceId}:t1` }) as const;
+  const herd = [
+    agent("w1:p1", "idle", { ...on("bluefin", "w1", "collie", 1), sessionName: "lead-idle" }),
+    agent("w1:p2", "blocked", { ...on("bluefin", "w1", "collie", 1), sessionName: "lead-stuck" }),
+    agent("w2:p1", "working", { ...on("bluefin", "w2", "site", 2), sessionName: "lead-busy" }),
+    agent("w1:p1", "blocked", { ...on("workshop", "w1", "moonward", 1), sessionName: "peer-stuck" }),
+    agent("w2:p1", "idle", { ...on("workshop", "w2", "docs", 2), sessionName: "peer-idle" }),
+    agent("w1:p1", "working", { ...on("attic", "w1", "attic-ws", 1), sessionName: "attic-busy" }),
+  ];
+  const keyOf = (label: string, panes: AgentView[] = herd) =>
+    workspacePrefKey(groupPanesByWorkspace(panes, [], { order: "fixed" }).find((g) => g.label === label)!);
+  const folds = (over: Partial<{ openSpaces: string[]; closedMachines: string[] }> = {}) => ({
+    openSpaces: [],
+    closedMachines: [],
+    onToggleSpace: vi.fn(),
+    onToggleMachine: vi.fn(),
+    onOpenPlace: vi.fn(),
+    ...over,
+  });
+  const foldButton = (name: string) => screen.getByRole("button", { name: new RegExp(`^${name}(,|$)`) });
+
+  it("starts every space folded to its name: no pane row until it is opened", () => {
+    render(<AgentList agents={herd} servers={servers} folds={folds()} onOpen={vi.fn()} />);
+    expect(foldButton("collie")).toHaveAttribute("aria-expanded", "false");
+    expect(foldButton("moonward")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("lead-idle")).not.toBeInTheDocument();
+    expect(screen.queryByText("peer-stuck")).not.toBeInTheDocument();
+  });
+
+  it("groups the spaces under their machine, the lead first, each machine open by default", () => {
+    render(<AgentList agents={herd} servers={servers} folds={folds()} onOpen={vi.fn()} />);
+    const machines = ["bluefin", "workshop", "attic"].map((m) => foldButton(m));
+    machines.forEach((b) => expect(b).toHaveAttribute("aria-expanded", "true"));
+    expect(machines[0]).toHaveAccessibleName(/2 workspaces/);
+    expect(machines[2]).toHaveAccessibleName(/1 workspace\b/);
+    // Document order: each machine's spaces sit after it and before the next machine.
+    const order = ["bluefin", "collie", "site", "workshop", "moonward", "docs", "attic", "attic-ws"].map((n) => foldButton(n));
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
+  it("opens a space to its panes when its key is open, and only that space", () => {
+    render(<AgentList agents={herd} servers={servers} folds={folds({ openSpaces: [keyOf("collie")] })} onOpen={vi.fn()} />);
+    expect(foldButton("collie")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("lead-idle")).toBeInTheDocument();
+    expect(screen.getByText("lead-stuck")).toBeInTheDocument();
+    expect(screen.queryByText("lead-busy")).not.toBeInTheDocument();
+  });
+
+  it("asks to toggle a space by the key the device remembers it by, and a machine by its host", async () => {
+    const f = folds();
+    render(<AgentList agents={herd} servers={servers} folds={f} onOpen={vi.fn()} />);
+    await userEvent.click(foldButton("moonward"));
+    expect(f.onToggleSpace).toHaveBeenCalledWith(keyOf("moonward"));
+    await userEvent.click(foldButton("workshop"));
+    expect(f.onToggleMachine).toHaveBeenCalledWith("workshop");
+  });
+
+  it("folds a closed machine's spaces away entirely", () => {
+    render(<AgentList agents={herd} servers={servers} folds={folds({ closedMachines: ["workshop"] })} onOpen={vi.fn()} />);
+    expect(foldButton("workshop")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: /^moonward(,|$)/ })).not.toBeInTheDocument();
+    expect(foldButton("collie")).toBeInTheDocument();
+  });
+
+  it("keeps what needs you visible while folded: the space and its machine both say so", () => {
+    render(<AgentList agents={herd} servers={servers} folds={folds({ closedMachines: ["workshop"] })} onOpen={vi.fn()} />);
+    expect(foldButton("collie")).toHaveAccessibleName(/needs you/i);
+    expect(foldButton("workshop")).toHaveAccessibleName(/needs you/i);
+    expect(foldButton("site")).not.toHaveAccessibleName(/needs you/i);
+    expect(foldButton("attic")).not.toHaveAccessibleName(/needs you/i);
+  });
+
+  it("jumps from the summary line by opening the first space that needs you and its machine", async () => {
+    const f = folds({ closedMachines: ["bluefin"] });
+    render(<AgentList agents={herd} servers={servers} folds={f} onOpen={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: /^\d+ needs you/ }));
+    expect(f.onOpenPlace).toHaveBeenCalledWith(keyOf("collie"), "bluefin");
+  });
+
+  it("skips the machine level on a solo install: the spaces are the list", () => {
+    const solo = [
+      agent("w1:p1", "idle", { workspaceId: "w1", workspaceLabel: "alpha", workspaceNumber: 1, tabId: "w1:t1", sessionName: "a" }),
+      agent("w2:p1", "idle", { workspaceId: "w2", workspaceLabel: "beta", workspaceNumber: 2, tabId: "w2:t1", sessionName: "b" }),
+    ];
+    render(<AgentList agents={solo} folds={folds({ openSpaces: [keyOf("beta", solo)] })} onOpen={vi.fn()} />);
+    expect(foldButton("alpha")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("a")).not.toBeInTheDocument();
+    expect(screen.getByText("b")).toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: /\d+ workspaces?$/ })).toHaveLength(0);
+  });
+});

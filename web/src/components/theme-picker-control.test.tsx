@@ -424,9 +424,10 @@ describe("ThemePickerControl", () => {
       pick(container, fileOf(JSON.stringify(copy("plain", "Plain"))));
       const dialog = await screen.findByRole("dialog", { name: "Import this theme?" });
       const box = within(dialog).getByTestId("theme-shape-sample").parentElement;
-      expect(box?.style.getPropertyValue("--radius-lg")).toBe("2px");
-      expect(box?.style.getPropertyValue("--spacing")).toBe("0.25rem");
-      expect(within(dialog).getByTestId("theme-shape-words")).toHaveTextContent("radius: sharp");
+      // FORK: the default shape is round and roomy.
+      expect(box?.style.getPropertyValue("--radius-lg")).toBe("16px");
+      expect(box?.style.getPropertyValue("--spacing")).toBe("0.28rem");
+      expect(within(dialog).getByTestId("theme-shape-words")).toHaveTextContent("radius: round");
     });
 
     it("refuses a file with an unknown shape word, names the token, and applies nothing", async () => {

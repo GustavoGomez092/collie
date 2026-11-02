@@ -141,6 +141,9 @@ export function HomeRoute() {
     setDashView,
     setNeedsYouOnly,
     setPaneOrder,
+    toggleSpaceOpen,
+    toggleMachineClosed,
+    openPlace,
   } = useDashPrefs();
   // The Crew tab exists only while a crew is configured, the condition CrewFooterLink uses. A device
   // that stored "crew" and then lost its crew sees the Dashboard, and the stored choice is left alone,
@@ -379,6 +382,19 @@ export function HomeRoute() {
               // The empty dashboard's large "Start your first agent" card opens the same sheet.
               onFirstStart={fabOffered ? openNew : undefined}
               reveal={reveal}
+              // The folded dashboard (fork: collapsible spaces): machine → space → panes, each fold
+              // remembered on this device.
+              folds={
+                prefs.foldSpaces
+                  ? {
+                      openSpaces: prefs.openSpaces,
+                      closedMachines: prefs.closedMachines,
+                      onToggleSpace: toggleSpaceOpen,
+                      onToggleMachine: toggleMachineClosed,
+                      onOpenPlace: openPlace,
+                    }
+                  : undefined
+              }
               needsYouOnly={needsYouOnly}
               onNeedsYouOnlyChange={setNeedsYouOnly}
               renderBody={

@@ -88,6 +88,11 @@ afterEach(() => {
 });
 
 describe("the floating New button on the dashboard", () => {
+  // FORK: the dashboard folds by default; these cases press a pane row, so they keep the flat list.
+  beforeEach(() => {
+    localStorage.setItem("collie:dash-prefs:v1", JSON.stringify({ foldSpaces: false }));
+  });
+
   it("reads \"+ New\" at the top: a pill in the house 2px corner, named New", async () => {
     renderHome(homeData());
     const button = await screen.findByRole("button", { name: "New" });

@@ -160,10 +160,11 @@ describe("the shape tokens", () => {
   });
 
   it("names today's look as the default of every token", () => {
+    // FORK: round corners and roomy spacing are the default look.
     expect(SURFACE_DEFAULTS).toEqual({
-      radius: "sharp",
+      radius: "round",
       shadow: "default",
-      density: "default",
+      density: "roomy",
       weight: "default",
       border: "default",
       ground: "flat",
